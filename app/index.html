@@ -22,7 +22,7 @@
     background:radial-gradient(ellipse at 50% 50%,#0c0826 0%,#04040c 75%);
     overflow:hidden;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   .app{height:100dvh;position:relative;
-    padding:calc(env(safe-area-inset-top) + 76px) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left))}
+    padding:calc(env(safe-area-inset-top) + 40px) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left))}
 
   /* ---------- grid + pads (life-tracker style) ---------- */
   .grid{height:100%;display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(3,1fr);gap:12px}
@@ -90,15 +90,15 @@
   .grid.flip{animation:flip .22s ease-out} @keyframes flip{from{opacity:.25;transform:scale(.985)}to{opacity:1;transform:none}}
 
   /* ---------- floating pill ---------- */
-  .pill{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 36px);transform:translate(-50%,-50%);z-index:5;display:flex;gap:10px;padding:7px;border-radius:999px;
+  .pill{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 26px);transform:translate(-50%,-50%);z-index:5;display:flex;gap:4px;padding:3px;border-radius:999px;
     border:2px solid transparent;
     background:linear-gradient(#090612,#090612) padding-box, linear-gradient(120deg,#f6d9a8,#ff8ad0 45%,#7c5cff 72%,#f6d9a8) border-box;
     box-shadow:0 0 20px rgba(255,138,208,.28)}
-  .rbtn{width:50px;height:50px;border-radius:50%;border:2px solid rgba(232,201,160,.75);background:#07050f;color:#f6e7d1;
+  .rbtn{width:34px;height:34px;border-radius:50%;border:2px solid rgba(232,201,160,.75);background:#07050f;color:#f6e7d1;
     display:grid;place-items:center;padding:0;cursor:pointer;touch-action:manipulation;font-family:inherit}
   .rbtn:active{background:#1a1233}
   .rbtn.active{border-color:#ff7ac8;color:#fff;background:linear-gradient(160deg,#4a1f6e,#241046);box-shadow:0 0 14px rgba(255,122,200,.5)}
-  .rbtn svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  .rbtn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 
   /* ---------- popups ---------- */
   .overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:20;padding:12px;
@@ -207,7 +207,7 @@
   const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
   const noteName = n => NOTE_NAMES[n % 12] + (Math.floor(n / 12) - 2);   // Ableton: C3 = 60, so C1 = 36
   const COLS = ['90,169,255','73,224,200','141,255,106','255,193,90','255,107,127','176,115,255']; // per column
-  const APP_VERSION = 'v7';   // bump on every release (and VERSION in sw.js)
+  const APP_VERSION = 'v8';   // bump on every release (and VERSION in sw.js)
   const NPADS = 15, MAXP = 3, TOTAL = NPADS * MAXP, TRIGGER_MS = 120;   // 15 pads per page (3x5 / 5x3), up to 3 pages
   const DEF = { names: Array(TOTAL).fill(''), pages: 1, ch: 1, vel: 127, first: 36, mode: 'trigger', haptics: 1, wake: 1, outId: '' };
   const KEY = 'lumatrigger.v1';
