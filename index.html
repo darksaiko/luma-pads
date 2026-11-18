@@ -109,6 +109,9 @@
     font:400 15px 'Outfit',system-ui,sans-serif;cursor:pointer;touch-action:manipulation}
   .seg button.on,.btn.primary{color:#fff;border-color:#ff7ac8;background:linear-gradient(160deg,#3b1f6e,#1d1046);box-shadow:0 0 14px rgba(255,122,200,.3)}
   .btn.danger{color:#ffb0bf;border-color:rgba(255,107,127,.7)}
+  .foot{margin-top:22px;padding-top:14px;border-top:1px solid rgba(155,107,255,.25);text-align:center;font-size:12px;letter-spacing:1.5px;color:var(--muted)}
+  .foot a{color:#c9b8ff;text-decoration:none;border-bottom:1px dotted rgba(201,184,255,.6)}
+  .foot .ver{margin-left:6px;opacity:.8}
   input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:30px;background:transparent;touch-action:pan-x;margin:0}
   input[type=range]::-webkit-slider-runnable-track{height:5px;border-radius:5px;background:linear-gradient(90deg,#5aa9ff,#9b6bff,#ff4fa3)}
   input[type=range]::-moz-range-track{height:5px;border-radius:5px;background:linear-gradient(90deg,#5aa9ff,#9b6bff,#ff4fa3)}
@@ -162,6 +165,7 @@
       <div class="field full"><label>Pad names</label>
         <button class="btn danger" id="btnReset">Clear all names</button></div>
     </div>
+    <div class="foot">&copy; AlpacaSoft &amp; <a href="https://instagram.com/darksaiko" target="_blank" rel="noopener noreferrer">Saiko</a><span class="ver" id="appVer"></span></div>
   </div>
 </div>
 
@@ -184,6 +188,7 @@
   const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
   const noteName = n => NOTE_NAMES[n % 12] + (Math.floor(n / 12) - 2);   // Ableton: C3 = 60, so C1 = 36
   const COLS = ['90,169,255','73,224,200','141,255,106','255,193,90','255,107,127','176,115,255']; // per column
+  const APP_VERSION = 'v2';   // bump on every release
   const NPADS = 12, TRIGGER_MS = 120;
   const DEF = { names: Array(NPADS).fill(''), ch: 1, vel: 127, first: 36, mode: 'trigger', haptics: 1, wake: 1, outId: '' };
   const KEY = 'lumatrigger.v1';
@@ -409,6 +414,7 @@
   }
 
   // ================= boot =================
+  $('appVer').textContent = '· ' + APP_VERSION;
   syncUI(); wake();
   try {   // reconnect silently if MIDI permission was already granted
     navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 'granted') connectMIDI(); }).catch(() => {});
