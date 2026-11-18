@@ -71,7 +71,7 @@
   @keyframes blink{50%{opacity:.25}}
 
   /* ---------- chips ---------- */
-  .chip{position:absolute;top:calc(env(safe-area-inset-top) + 8px);height:26px;display:flex;align-items:center;gap:7px;
+  .chip{position:absolute;z-index:6;top:calc(env(safe-area-inset-top) + 8px);height:26px;display:flex;align-items:center;gap:7px;
     padding:0 12px;border-radius:999px;border:1px solid rgba(155,107,255,.5);background:rgba(10,7,32,.85);
     font:400 12px 'Outfit',system-ui,sans-serif;letter-spacing:1px;color:var(--muted);max-width:calc(50vw - 104px);min-width:74px;white-space:nowrap;cursor:pointer}
   .chip span.t{overflow:hidden;text-overflow:ellipsis}
@@ -207,7 +207,7 @@
   const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
   const noteName = n => NOTE_NAMES[n % 12] + (Math.floor(n / 12) - 2);   // Ableton: C3 = 60, so C1 = 36
   const COLS = ['90,169,255','73,224,200','141,255,106','255,193,90','255,107,127','176,115,255']; // per column
-  const APP_VERSION = 'v9';   // bump on every release (and VERSION in sw.js)
+  const APP_VERSION = 'v10';   // bump on every release (and VERSION in sw.js)
   const NPADS = 15, MAXP = 3, TOTAL = NPADS * MAXP, TRIGGER_MS = 120;   // 15 pads per page (3x5 / 5x3), up to 3 pages
   const DEF = { names: Array(TOTAL).fill(''), pages: 1, ch: 1, vel: 127, first: 36, mode: 'trigger', haptics: 1, wake: 1, outId: '' };
   const KEY = 'lumatrigger.v1';
