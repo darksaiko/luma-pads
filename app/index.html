@@ -54,9 +54,10 @@
 
   .name{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;text-align:center;
     padding:0 12%;font-size:calc(var(--fs,20) * 1cqmin);line-height:1.1;font-weight:200;color:#fff;letter-spacing:.5px;
-    text-shadow:0 0 14px rgba(var(--c),.95);overflow-wrap:anywhere;pointer-events:none;
+    text-shadow:0 0 14px rgba(var(--c),.95);overflow-wrap:normal;word-break:normal;hyphens:none;pointer-events:none;
     display:-webkit-flex}
   .name span{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .pad.brk .name{overflow-wrap:anywhere}   /* last resort for a single huge word */
   .pad.empty .name{color:rgba(255,255,255,.4);text-shadow:none}
   .note{position:absolute;left:16px;bottom:11px;z-index:2;font-size:11px;font-weight:600;letter-spacing:1.5px;
     color:rgba(var(--c),.95);opacity:.85;pointer-events:none}
@@ -72,7 +73,7 @@
   /* ---------- chips ---------- */
   .chip{position:absolute;top:calc(env(safe-area-inset-top) + 8px);height:26px;display:flex;align-items:center;gap:7px;
     padding:0 12px;border-radius:999px;border:1px solid rgba(155,107,255,.5);background:rgba(10,7,32,.85);
-    font:400 12px 'Outfit',system-ui,sans-serif;letter-spacing:1px;color:var(--muted);max-width:34vw;white-space:nowrap;cursor:pointer}
+    font:400 12px 'Outfit',system-ui,sans-serif;letter-spacing:1px;color:var(--muted);max-width:calc(50vw - 104px);min-width:74px;white-space:nowrap;cursor:pointer}
   .chip span.t{overflow:hidden;text-overflow:ellipsis}
   .chip .dot{flex:none;width:8px;height:8px;border-radius:50%;background:#ff6b7f;box-shadow:0 0 8px #ff6b7f}
   .chip.ok{color:#cfe;border-color:rgba(141,255,106,.5)} .chip.ok .dot{background:#8dff6a;box-shadow:0 0 8px #8dff6a}
@@ -196,7 +197,7 @@
   const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
   const noteName = n => NOTE_NAMES[n % 12] + (Math.floor(n / 12) - 2);   // Ableton: C3 = 60, so C1 = 36
   const COLS = ['90,169,255','73,224,200','141,255,106','255,193,90','255,107,127','176,115,255']; // per column
-  const APP_VERSION = 'v3';   // bump on every release (and VERSION in sw.js)
+  const APP_VERSION = 'v4';   // bump on every release (and VERSION in sw.js)
   const NPADS = 12, TRIGGER_MS = 120;
   const DEF = { names: Array(NPADS).fill(''), ch: 1, vel: 127, first: 36, mode: 'trigger', haptics: 1, wake: 1, outId: '' };
   const KEY = 'lumatrigger.v1';
@@ -209,13 +210,13 @@
   const $ = id => document.getElementById(id);
 
   // ================= MIDI =================
-  let access = null, out = null, midiState = 'idle', midiErr = '';
+  let access = null, out = null, midiState = 'idle', midiErr = '', autoTried = false;
   const chip = $('chipStatus'), chipText = $('chipText');
 
   function setChip() {
     const ok = !!out;
     chip.classList.toggle('ok', ok);
-    chipText.textContent = ok ? out.name : (midiState === 'noports' ? 'no MIDI output' : midiState === 'idle' ? 'tap to connect' : 'MIDI unavailable');
+    chipText.textContent = ok ? out.name : 'no MIDI';   // short on purpose: the pill covers the rest on a narrow phone (details are in Settings)
     const msg = {
       idle: 'Not connected yet. Tap “Connect / refresh” and allow MIDI access.',
       unsupported: 'This browser (or this preview frame) doesn’t offer Web MIDI. Use Chrome on Android, on a page opened directly over HTTPS.',
@@ -270,16 +271,44 @@
     grid.appendChild(el); pads.push(el);
   }
 
-  function fsFor(len) { return len <= 5 ? 24 : len <= 9 ? 20 : len <= 14 ? 16 : len <= 22 ? 13 : 11; }
+  // Pick the biggest font size where the longest word fits on one line (no mid-word breaks),
+  // the text needs at most 3 lines, and it stays clear of the note label.
+  const mctx = document.createElement('canvas').getContext('2d');
+  const textW = (t, px) => { mctx.font = '200 100px Outfit, system-ui, sans-serif'; return mctx.measureText(t).width * px / 100 + t.length * 0.5; };
+  function linesFor(words, px, maxW) {
+    const space = textW(' ', px); let lines = 1, cur = 0;
+    for (const w of words) {
+      const ww = textW(w, px);
+      if (ww > maxW) return 0;                       // a single word is too wide at this size
+      if (!cur) cur = ww; else if (cur + space + ww <= maxW) cur += space + ww; else { lines++; cur = ww; }
+    }
+    return lines;
+  }
+  function fitFont(text, W, H) {
+    const words = text.split(/\s+/).filter(Boolean), maxW = W * 0.76;
+    for (let px = Math.min(W, H) * 0.24; px >= 9; px -= 0.5) {
+      const l = linesFor(words, px, maxW);
+      if (l && l <= 3 && l * px * 1.1 <= H * 0.6) return { px, ok: true };
+    }
+    return { px: 9, ok: false };
+  }
   function renderPads() {
     pads.forEach((el, i) => {
-      const nm = S.names[i].trim();
+      const nm = S.names[i].trim(), shown = nm || 'Pad ' + (i + 1);
       el.classList.toggle('empty', !nm);
-      el.querySelector('.name span').textContent = nm || 'Pad ' + (i + 1);
-      el.style.setProperty('--fs', fsFor((nm || 'Pad 12').length));
+      el.querySelector('.name span').textContent = shown;
+      const W = el.clientWidth, H = el.clientHeight;
+      if (W && H) {
+        const f = fitFont(shown, W, H);
+        el.style.setProperty('--fs', f.px / (Math.min(W, H) / 100));
+        el.classList.toggle('brk', !f.ok);
+      }
       el.querySelector('.note').textContent = noteName(S.first + i);
     });
   }
+  let rpQueued = false;
+  new ResizeObserver(() => { if (!rpQueued) { rpQueued = true; requestAnimationFrame(() => { rpQueued = false; renderPads(); }); } }).observe(grid);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(renderPads);
 
   function ripple(el, e) {
     const r = el.getBoundingClientRect(), s = document.createElement('span');
@@ -292,7 +321,7 @@
   function press(i, e) {
     const el = pads[i];
     clearTimeout(offTimers[i]);
-    if (!access && navigator.requestMIDIAccess) connectMIDI();
+    if (!access && !autoTried && navigator.requestMIDIAccess) { autoTried = true; connectMIDI(); }   // ask once, not on every tap
     el.classList.add('on'); onSince[i] = performance.now(); ripple(el, e);
     if (S.haptics && navigator.vibrate) { try { navigator.vibrate(10); } catch (_) {} }
     if (noteOn(i) && S.mode === 'trigger') offTimers[i] = setTimeout(() => noteOff(i), TRIGGER_MS);
