@@ -1,0 +1,6 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/alpacaqr/public_html/trigger/
+    - /bin/mkdir -p $DEPLOYPATH
+    - /bin/cp -f index.html $DEPLOYPATH
