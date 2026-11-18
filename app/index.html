@@ -22,11 +22,11 @@
     background:radial-gradient(ellipse at 50% 50%,#0c0826 0%,#04040c 75%);
     overflow:hidden;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   .app{height:100dvh;position:relative;
-    padding:calc(env(safe-area-inset-top) + 36px) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left))}
+    padding:calc(env(safe-area-inset-top) + 76px) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left))}
 
   /* ---------- grid + pads (life-tracker style) ---------- */
-  .grid{height:100%;display:grid;grid-template-columns:repeat(6,1fr);grid-template-rows:repeat(2,1fr);gap:12px}
-  @media (orientation:portrait){ .grid{grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(4,1fr)} }
+  .grid{height:100%;display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(3,1fr);gap:12px}
+  @media (orientation:portrait){ .grid{grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(5,1fr)} }
 
   .pad{position:relative;container-type:size;border-radius:26px;overflow:hidden;touch-action:none;cursor:pointer;
     border:2px solid rgba(var(--c),.9);
@@ -79,8 +79,15 @@
   .chip.ok{color:#cfe;border-color:rgba(141,255,106,.5)} .chip.ok .dot{background:#8dff6a;box-shadow:0 0 8px #8dff6a}
   .chip.warn{animation:shake .4s} @keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
   #chipStatus{left:max(14px, env(safe-area-inset-left))}
-  #chipEdit{right:max(14px, env(safe-area-inset-right));display:none;color:#ffc0e0;border-color:rgba(255,79,163,.7);cursor:default}
-  .editing #chipEdit{display:flex}
+  #chipPage{right:max(14px, env(safe-area-inset-right));top:calc(env(safe-area-inset-top) + 4px);height:40px;padding:0 2px;gap:0;display:none;align-items:center;cursor:default;color:#fff;border-color:rgba(255,122,200,.6)}
+  #chipPage button{width:28px;height:36px;border:0;background:transparent;color:inherit;font:300 22px 'Outfit',system-ui,sans-serif;padding:0;cursor:pointer;touch-action:manipulation}
+  #chipPage button:disabled{opacity:.25}
+  #chipPage .t{padding:0 2px;font-size:12px;letter-spacing:1px;min-width:30px;text-align:center;overflow:visible}
+  .toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 20px);transform:translateX(-50%) translateY(10px);opacity:0;pointer-events:none;z-index:15;
+    padding:10px 18px;border-radius:999px;background:rgba(10,7,32,.92);border:1px solid rgba(255,122,200,.6);
+    font:400 13px 'Outfit',system-ui,sans-serif;letter-spacing:1px;color:#ffd6ec;transition:opacity .25s, transform .25s}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .grid.flip{animation:flip .22s ease-out} @keyframes flip{from{opacity:.25;transform:scale(.985)}to{opacity:1;transform:none}}
 
   /* ---------- floating pill ---------- */
   .pill{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 36px);transform:translate(-50%,-50%);z-index:5;display:flex;gap:10px;padding:7px;border-radius:999px;
@@ -131,7 +138,7 @@
 <body>
 <div class="app" id="app">
   <button class="chip" id="chipStatus"><span class="dot"></span><span class="t" id="chipText">no MIDI</span></button>
-  <div class="chip" id="chipEdit"><span class="t">edit mode · tap a pad to rename</span></div>
+  <div class="chip" id="chipPage"><button id="pgPrev" aria-label="Previous page">&lsaquo;</button><span class="t" id="pgLabel">1 / 1</span><button id="pgNext" aria-label="Next page">&rsaquo;</button></div>
 
   <div class="pill">
     <button class="rbtn" id="btnFs" aria-label="Fullscreen"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
@@ -140,6 +147,7 @@
   </div>
 
   <div class="grid" id="grid"></div>
+  <div class="toast" id="toast"></div>
 </div>
 
 <!-- settings -->
@@ -170,6 +178,8 @@
         <div class="seg" id="segHap"><button data-v="1">On</button><button data-v="0">Off</button></div></div>
       <div class="field"><label>Keep screen on</label>
         <div class="seg" id="segWake"><button data-v="1">On</button><button data-v="0">Off</button></div></div>
+      <div class="field"><label>Pages</label><select id="selPages"><option value="1">1 page</option><option value="2">2 pages</option><option value="3">3 pages</option></select>
+        <small id="pagesHint"></small></div>
 
       <div class="field full"><label>Pad names</label>
         <button class="btn danger" id="btnReset">Clear all names</button></div>
@@ -197,15 +207,17 @@
   const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
   const noteName = n => NOTE_NAMES[n % 12] + (Math.floor(n / 12) - 2);   // Ableton: C3 = 60, so C1 = 36
   const COLS = ['90,169,255','73,224,200','141,255,106','255,193,90','255,107,127','176,115,255']; // per column
-  const APP_VERSION = 'v6';   // bump on every release (and VERSION in sw.js)
-  const NPADS = 12, TRIGGER_MS = 120;
-  const DEF = { names: Array(NPADS).fill(''), ch: 1, vel: 127, first: 36, mode: 'trigger', haptics: 1, wake: 1, outId: '' };
+  const APP_VERSION = 'v7';   // bump on every release (and VERSION in sw.js)
+  const NPADS = 15, MAXP = 3, TOTAL = NPADS * MAXP, TRIGGER_MS = 120;   // 15 pads per page (3x5 / 5x3), up to 3 pages
+  const DEF = { names: Array(TOTAL).fill(''), pages: 1, ch: 1, vel: 127, first: 36, mode: 'trigger', haptics: 1, wake: 1, outId: '' };
   const KEY = 'lumatrigger.v1';
   let S = JSON.parse(JSON.stringify(DEF));
   try { const raw = localStorage.getItem(KEY); if (raw) Object.assign(S, JSON.parse(raw)); } catch (_) {}
   if (!Array.isArray(S.names)) S.names = [];
-  S.names = Array.from({ length: NPADS }, (_, i) => String(S.names[i] || ''));
-  S.first = Math.min(Math.max(+S.first || 36, 0), 127 - (NPADS - 1));
+  S.names = Array.from({ length: TOTAL }, (_, i) => String(S.names[i] || ''));
+  S.pages = Math.min(Math.max(Math.round(+S.pages) || 1, 1), MAXP);
+  const maxFirst = () => 127 - (NPADS * S.pages - 1);
+  S.first = Math.min(Math.max(+S.first || 36, 0), maxFirst());
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (_) {} };
   const $ = id => document.getElementById(id);
 
@@ -256,13 +268,13 @@
     try { out.send(bytes); return true; } catch (_) { return false; }
   }
   const chByte = () => (S.ch - 1) & 15;
-  const sounding = Array(NPADS).fill(false);
+  const sounding = Array(TOTAL).fill(false);
   const noteOn = i => { sounding[i] = sendMsg([0x90 | chByte(), S.first + i, S.vel]); return sounding[i]; };
   const noteOff = i => { if (!sounding[i]) return; sounding[i] = false; sendMsg([0x80 | chByte(), S.first + i, 0]); };
 
   // ================= pads =================
   const grid = $('grid'), pads = [], offTimers = [], onSince = [], holds = new Map();
-  let editing = false;
+  let editing = false, page = 0;
 
   for (let i = 0; i < NPADS; i++) {
     const el = document.createElement('div');
@@ -294,7 +306,7 @@
   }
   function renderPads() {
     pads.forEach((el, i) => {
-      const nm = S.names[i].trim(), shown = nm || 'Pad ' + (i + 1);
+      const a = page * NPADS + i, nm = S.names[a].trim(), shown = nm || 'Pad ' + (a + 1);
       el.classList.toggle('empty', !nm);
       el.querySelector('.name span').textContent = shown;
       const W = el.clientWidth, H = el.clientHeight;
@@ -303,7 +315,7 @@
         el.style.setProperty('--fs', f.px / (Math.min(W, H) / 100));
         el.classList.toggle('brk', !f.ok);
       }
-      el.querySelector('.note').textContent = noteName(S.first + i);
+      el.querySelector('.note').textContent = noteName(S.first + a);
     });
   }
   let rpQueued = false;
@@ -318,33 +330,35 @@
     el.appendChild(s); s.addEventListener('animationend', () => s.remove());
   }
 
-  function press(i, e) {
+  function press(i, a, e) {          // i = pad on screen, a = pad number across all pages
     const el = pads[i];
-    clearTimeout(offTimers[i]);
+    clearTimeout(offTimers[a]);
     if (!access && !autoTried && navigator.requestMIDIAccess) { autoTried = true; connectMIDI(); }   // ask once, not on every tap
     el.classList.add('on'); onSince[i] = performance.now(); ripple(el, e);
     if (S.haptics && navigator.vibrate) { try { navigator.vibrate(10); } catch (_) {} }
-    if (noteOn(i) && S.mode === 'trigger') offTimers[i] = setTimeout(() => noteOff(i), TRIGGER_MS);
+    if (noteOn(a) && S.mode === 'trigger') offTimers[a] = setTimeout(() => noteOff(a), TRIGGER_MS);
   }
-  function release(i) {
-    if (S.mode === 'gate') noteOff(i);
+  function release(i, a) {
+    if (S.mode === 'gate') noteOff(a);
     const wait = Math.max(0, 110 - (performance.now() - onSince[i]));
-    setTimeout(() => { if (![...holds.values()].includes(i)) pads[i].classList.remove('on'); }, wait);
+    setTimeout(() => { if (!isHeld(i)) pads[i].classList.remove('on'); }, wait);
   }
 
   let editCand = -1;
+  const isHeld = i => [...holds.values()].some(h => h.i === i);
   pads.forEach((el, i) => {
     el.addEventListener('pointerdown', e => {
       e.preventDefault();
       if (editing) { editCand = i; return; }
       try { el.setPointerCapture(e.pointerId); } catch (_) {}
-      if ([...holds.values()].includes(i)) return;      // already down from another finger
-      holds.set(e.pointerId, i); press(i, e);
+      if (isHeld(i)) return;      // already down from another finger
+      const a = page * NPADS + i;
+      holds.set(e.pointerId, { i, a }); press(i, a, e);
     });
     const up = e => {
       if (editing) { if (e.type === 'pointerup' && editCand === i) openName(i); editCand = -1; return; }
-      if (!holds.has(e.pointerId)) return;
-      const k = holds.get(e.pointerId); holds.delete(e.pointerId); release(k);
+      const h = holds.get(e.pointerId); if (!h) return;
+      holds.delete(e.pointerId); release(h.i, h.a);
     };
     el.addEventListener('pointerup', up);
     el.addEventListener('pointercancel', up);
@@ -354,7 +368,7 @@
   document.addEventListener('gesturestart', e => e.preventDefault());
 
   function panic() {
-    [...holds.values()].forEach(i => { if (S.mode === 'gate') noteOff(i); pads[i].classList.remove('on'); });
+    [...holds.values()].forEach(h => { if (S.mode === 'gate') noteOff(h.a); pads[h.i].classList.remove('on'); });
     holds.clear();
   }
   document.addEventListener('visibilitychange', () => { if (document.hidden) panic(); else wake(); });
@@ -363,8 +377,9 @@
   let nameIdx = -1;
   const ovName = $('ovName'), inp = $('inpName');
   function openName(i) {
-    nameIdx = i; $('nameTitle').textContent = 'Pad ' + (i + 1) + ' · ' + noteName(S.first + i);
-    inp.value = S.names[i]; ovName.classList.add('open');
+    const a = page * NPADS + i;
+    nameIdx = a; $('nameTitle').textContent = 'Pad ' + (a + 1) + ' · ' + noteName(S.first + a);
+    inp.value = S.names[a]; ovName.classList.add('open');
     setTimeout(() => { inp.focus(); inp.select(); }, 60);
   }
   const closeName = () => { ovName.classList.remove('open'); inp.blur(); nameIdx = -1; };
@@ -379,15 +394,45 @@
   btnEdit.addEventListener('click', () => {
     editing = !editing; panic();
     $('app').classList.toggle('editing', editing); btnEdit.classList.toggle('active', editing);
+    if (editing) toast('Edit mode · tap a pad to rename');
   });
+
+  function toast(msg) {
+    const t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2400);
+  }
+
+  // ================= pages =================
+  const chipPage = $('chipPage'), pgLabel = $('pgLabel'), pgPrev = $('pgPrev'), pgNext = $('pgNext');
+  function syncPages() {
+    if (page >= S.pages) page = S.pages - 1;
+    chipPage.style.display = S.pages > 1 ? 'flex' : 'none';
+    pgLabel.textContent = (page + 1) + ' / ' + S.pages;
+    pgPrev.disabled = page === 0; pgNext.disabled = page >= S.pages - 1;
+    renderPads();
+  }
+  function goPage(n) {
+    if (n < 0 || n >= S.pages || n === page) return;
+    panic(); page = n; syncPages();
+    grid.classList.remove('flip'); void grid.offsetWidth; grid.classList.add('flip');
+  }
+  pgPrev.addEventListener('click', () => goPage(page - 1));
+  pgNext.addEventListener('click', () => goPage(page + 1));
 
   // ================= settings =================
   const ovSet = $('ovSet'), selCh = $('selCh'), selFirst = $('selFirst');
   for (let c = 1; c <= 16; c++) { const o = document.createElement('option'); o.value = c; o.textContent = 'Channel ' + c; selCh.appendChild(o); }
-  for (let n = 0; n <= 127 - (NPADS - 1); n++) { const o = document.createElement('option'); o.value = n; o.textContent = noteName(n) + '  ·  ' + n; selFirst.appendChild(o); }
+  function buildFirst() {
+    S.first = Math.min(S.first, maxFirst()); selFirst.innerHTML = '';
+    for (let n = 0; n <= maxFirst(); n++) { const o = document.createElement('option'); o.value = n; o.textContent = noteName(n) + '  ·  ' + n; selFirst.appendChild(o); }
+  }
+  const selPages = $('selPages');
 
   function syncUI() {
-    selCh.value = S.ch; selFirst.value = S.first;
+    selCh.value = S.ch; selFirst.value = S.first; selPages.value = S.pages;
+    $('pagesHint').textContent = S.pages > 1
+      ? 'page 2 starts at ' + noteName(S.first + NPADS) + (S.pages > 2 ? ', page 3 at ' + noteName(S.first + 2 * NPADS) : '')
+      : 'extra pages hold 15 pads each; notes keep going up';
     $('rngVel').value = S.vel; $('vVel').textContent = S.vel;
     document.querySelectorAll('#segMode button').forEach(b => b.classList.toggle('on', b.dataset.v === S.mode));
     document.querySelectorAll('#segHap button').forEach(b => b.classList.toggle('on', +b.dataset.v === S.haptics));
@@ -398,6 +443,7 @@
 
   selCh.addEventListener('change', () => set('ch', +selCh.value));
   selFirst.addEventListener('change', () => set('first', +selFirst.value));
+  selPages.addEventListener('change', () => { panic(); S.pages = +selPages.value; buildFirst(); save(); syncUI(); syncPages(); });
   $('rngVel').addEventListener('input', e => set('vel', +e.target.value));
   document.querySelectorAll('#segMode button').forEach(b => b.addEventListener('click', () => set('mode', b.dataset.v)));
   document.querySelectorAll('#segHap button').forEach(b => b.addEventListener('click', () => set('haptics', +b.dataset.v)));
@@ -409,8 +455,8 @@
   $('btnConnect').addEventListener('click', connectMIDI);
   $('btnTest').addEventListener('click', () => {
     if (!out) { sendMsg([]); return; }
-    pads[0].classList.add('on'); ripple(pads[0]); clearTimeout(offTimers[0]); noteOn(0);
-    setTimeout(() => { noteOff(0); pads[0].classList.remove('on'); }, 250);
+    const a = page * NPADS; pads[0].classList.add('on'); ripple(pads[0]); clearTimeout(offTimers[a]); noteOn(a);
+    setTimeout(() => { noteOff(a); pads[0].classList.remove('on'); }, 250);
   });
 
   let resetArmed = 0;
@@ -420,7 +466,7 @@
       e.target.textContent = 'Tap again to clear all names'; return;
     }
     clearTimeout(resetArmed); resetArmed = 0; e.target.textContent = 'Clear all names';
-    S.names = Array(NPADS).fill(''); save(); renderPads();
+    S.names = Array(TOTAL).fill(''); save(); renderPads();
   });
 
   const openSet = () => { panic(); ovSet.classList.add('open'); };
@@ -451,7 +497,7 @@
 
   // ================= boot =================
   $('appVer').textContent = '· ' + APP_VERSION;
-  syncUI(); wake();
+  buildFirst(); syncUI(); syncPages(); wake();
   if ('serviceWorker' in navigator && window.isSecureContext) {   // offline support
     try { navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (_) {}
   }
