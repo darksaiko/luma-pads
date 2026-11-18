@@ -5,9 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#04040c">
 <title>Luma Trigger — MIDI Pad</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;600&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Trigger">
 <style>
+  @font-face{font-family:'Outfit';font-weight:200;font-style:normal;font-display:swap;src:url(fonts/outfit-200.woff2) format('woff2')}
+  @font-face{font-family:'Outfit';font-weight:300;font-style:normal;font-display:swap;src:url(fonts/outfit-300.woff2) format('woff2')}
+  @font-face{font-family:'Outfit';font-weight:400;font-style:normal;font-display:swap;src:url(fonts/outfit-400.woff2) format('woff2')}
+  @font-face{font-family:'Outfit';font-weight:600;font-style:normal;font-display:swap;src:url(fonts/outfit-600.woff2) format('woff2')}
   :root{ --bg:#04040c; --accent:#9b6bff; --pink:#ff4fa3; --text:#ece8ff; --muted:#8d85c4; }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;height:100%;color:var(--text);font-family:'Outfit',system-ui,sans-serif;font-weight:300;
@@ -188,7 +196,7 @@
   const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
   const noteName = n => NOTE_NAMES[n % 12] + (Math.floor(n / 12) - 2);   // Ableton: C3 = 60, so C1 = 36
   const COLS = ['90,169,255','73,224,200','141,255,106','255,193,90','255,107,127','176,115,255']; // per column
-  const APP_VERSION = 'v2';   // bump on every release
+  const APP_VERSION = 'v3';   // bump on every release (and VERSION in sw.js)
   const NPADS = 12, TRIGGER_MS = 120;
   const DEF = { names: Array(NPADS).fill(''), ch: 1, vel: 127, first: 36, mode: 'trigger', haptics: 1, wake: 1, outId: '' };
   const KEY = 'lumatrigger.v1';
@@ -416,6 +424,9 @@
   // ================= boot =================
   $('appVer').textContent = '· ' + APP_VERSION;
   syncUI(); wake();
+  if ('serviceWorker' in navigator && window.isSecureContext) {   // offline support
+    try { navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (_) {}
+  }
   try {   // reconnect silently if MIDI permission was already granted
     navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 'granted') connectMIDI(); }).catch(() => {});
   } catch (_) {}
