@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#04040c">
+<title>Luma Trigger — MIDI Pad</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root{ --bg:#04040c; --accent:#9b6bff; --pink:#ff4fa3; --text:#ece8ff; --muted:#8d85c4; }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;color:var(--text);font-family:'Outfit',system-ui,sans-serif;font-weight:300;
+    background:radial-gradient(ellipse at 50% 50%,#0c0826 0%,#04040c 75%);
+    overflow:hidden;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  .app{height:100dvh;position:relative;
+    padding:calc(env(safe-area-inset-top) + 36px) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left))}
+
+  /* ---------- grid + pads (life-tracker style) ---------- */
+  .grid{height:100%;display:grid;grid-template-columns:repeat(6,1fr);grid-template-rows:repeat(2,1fr);gap:12px}
+  @media (orientation:portrait){ .grid{grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(4,1fr)} }
+
+  .pad{position:relative;container-type:size;border-radius:26px;overflow:hidden;touch-action:none;cursor:pointer;
+    border:2px solid rgba(var(--c),.9);
+    background:radial-gradient(120% 120% at 50% 40%, rgba(var(--c),.24), rgba(var(--c),.07) 60%, rgba(4,4,12,.92));
+    box-shadow:0 0 18px rgba(var(--c),.45), inset 0 0 28px rgba(var(--c),.22);
+    transition:transform .09s ease, box-shadow .2s ease, background .2s ease}
+  .pad::after{content:"";position:absolute;inset:7px;border-radius:19px;border:1px solid rgba(var(--c),.42);pointer-events:none}
+  .pad.on{transform:scale(.965);
+    box-shadow:0 0 34px rgba(var(--c),.9), 0 0 70px rgba(var(--c),.4), inset 0 0 40px rgba(var(--c),.55);
+    background:radial-gradient(120% 120% at 50% 40%, rgba(var(--c),.55), rgba(var(--c),.18) 60%, rgba(4,4,12,.92))}
+
+  .orb{position:absolute;left:50%;top:50%;width:76cqmin;height:76cqmin;transform:translate(-50%,-50%);border-radius:50%;
+    border:1.5px solid rgba(var(--c),.5);
+    background:radial-gradient(circle, rgba(var(--c),.30), rgba(var(--c),.06) 70%, transparent);
+    transition:transform .15s ease, background .15s ease, border-color .15s ease}
+  .orb::before{content:"";position:absolute;inset:-17%;border-radius:50%;border:1.5px dotted rgba(var(--c),.55);animation:spin 46s linear infinite}
+  .orb::after{content:"";position:absolute;inset:-7%;border-radius:50%;border:2px solid transparent;
+    border-top-color:rgba(var(--c),.6);border-bottom-color:rgba(var(--c),.6);animation:spin 16s linear infinite reverse}
+  .orb i{position:absolute;left:50%;width:12px;height:12px;margin-left:-6px;background:#fff;opacity:.9;
+    clip-path:polygon(50% 0,60% 40%,100% 50%,60% 60%,50% 100%,40% 60%,0 50%,40% 40%)}
+  .orb i:first-child{top:-6px} .orb i:last-child{bottom:-6px}
+  .pad.on .orb{transform:translate(-50%,-50%) scale(1.1);border-color:rgba(var(--c),1);
+    background:radial-gradient(circle, rgba(var(--c),.75), rgba(var(--c),.16) 70%, transparent)}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .name{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;text-align:center;
+    padding:0 12%;font-size:calc(var(--fs,20) * 1cqmin);line-height:1.1;font-weight:200;color:#fff;letter-spacing:.5px;
+    text-shadow:0 0 14px rgba(var(--c),.95);overflow-wrap:anywhere;pointer-events:none;
+    display:-webkit-flex}
+  .name span{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .pad.empty .name{color:rgba(255,255,255,.4);text-shadow:none}
+  .note{position:absolute;left:16px;bottom:11px;z-index:2;font-size:11px;font-weight:600;letter-spacing:1.5px;
+    color:rgba(var(--c),.95);opacity:.85;pointer-events:none}
+  .ripple{position:absolute;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;z-index:1;pointer-events:none;
+    border:2px solid rgba(var(--c),.95);animation:rip .65s ease-out forwards}
+  @keyframes rip{to{transform:scale(16);opacity:0}}
+
+  .editing .pad{border-style:dashed}
+  .editing .pad::before{content:"";position:absolute;right:14px;top:12px;width:9px;height:9px;border-radius:50%;
+    background:var(--pink);box-shadow:0 0 10px var(--pink);z-index:3;animation:blink 1.2s ease-in-out infinite}
+  @keyframes blink{50%{opacity:.25}}
+
+  /* ---------- chips ---------- */
+  .chip{position:absolute;top:calc(env(safe-area-inset-top) + 8px);height:26px;display:flex;align-items:center;gap:7px;
+    padding:0 12px;border-radius:999px;border:1px solid rgba(155,107,255,.5);background:rgba(10,7,32,.85);
+    font:400 12px 'Outfit',system-ui,sans-serif;letter-spacing:1px;color:var(--muted);max-width:34vw;white-space:nowrap;cursor:pointer}
+  .chip span.t{overflow:hidden;text-overflow:ellipsis}
+  .chip .dot{flex:none;width:8px;height:8px;border-radius:50%;background:#ff6b7f;box-shadow:0 0 8px #ff6b7f}
+  .chip.ok{color:#cfe;border-color:rgba(141,255,106,.5)} .chip.ok .dot{background:#8dff6a;box-shadow:0 0 8px #8dff6a}
+  .chip.warn{animation:shake .4s} @keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+  #chipStatus{left:max(14px, env(safe-area-inset-left))}
+  #chipEdit{right:max(14px, env(safe-area-inset-right));display:none;color:#ffc0e0;border-color:rgba(255,79,163,.7);cursor:default}
+  .editing #chipEdit{display:flex}
+
+  /* ---------- floating pill ---------- */
+  .pill{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 36px);transform:translate(-50%,-50%);z-index:5;display:flex;gap:10px;padding:7px;border-radius:999px;
+    border:2px solid transparent;
+    background:linear-gradient(#090612,#090612) padding-box, linear-gradient(120deg,#f6d9a8,#ff8ad0 45%,#7c5cff 72%,#f6d9a8) border-box;
+    box-shadow:0 0 20px rgba(255,138,208,.28)}
+  .rbtn{width:50px;height:50px;border-radius:50%;border:2px solid rgba(232,201,160,.75);background:#07050f;color:#f6e7d1;
+    display:grid;place-items:center;padding:0;cursor:pointer;touch-action:manipulation;font-family:inherit}
+  .rbtn:active{background:#1a1233}
+  .rbtn.active{border-color:#ff7ac8;color:#fff;background:linear-gradient(160deg,#4a1f6e,#241046);box-shadow:0 0 14px rgba(255,122,200,.5)}
+  .rbtn svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---------- popups ---------- */
+  .overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:20;padding:12px;
+    background:rgba(2,2,10,.76);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+  .overlay.open{display:flex} .overlay.top{align-items:flex-start;padding-top:10px}
+  .sheet{position:relative;width:min(680px,100%);max-height:calc(100dvh - 24px);overflow:auto;border-radius:30px;
+    border:2px solid rgba(155,107,255,.9);box-shadow:0 0 28px rgba(155,107,255,.5), inset 0 0 30px rgba(155,107,255,.2);
+    background:linear-gradient(160deg,#150f3a,#09061d);padding:18px 24px 22px}
+  .sheet.small{width:min(480px,100%)}
+  .sheet h2{margin:0 0 14px;font-weight:200;font-size:22px;letter-spacing:4px;text-transform:uppercase;text-shadow:0 0 14px rgba(155,107,255,.8)}
+  .close{position:absolute;top:12px;right:14px;width:40px;height:40px} .close svg{width:18px;height:18px}
+  .fields{display:grid;grid-template-columns:1fr 1fr;gap:16px 28px}
+  @media (max-width:560px){.fields{grid-template-columns:1fr}}
+  .full{grid-column:1/-1}
+  .field{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .field > label{display:flex;justify-content:space-between;font-size:12px;font-weight:600;letter-spacing:2px;color:var(--muted);text-transform:uppercase}
+  .field > label em{font-style:normal;color:#c9b8ff;font-weight:400;letter-spacing:1px}
+  .field small{font-size:11px;color:#7a72a8;font-weight:300;letter-spacing:.5px;line-height:1.4}
+  select,input[type=text]{width:100%;padding:11px 12px;border-radius:14px;border:1.5px solid rgba(155,107,255,.7);background:#0b0826;color:var(--text);
+    font:400 16px 'Outfit',system-ui,sans-serif;outline:none}
+  input[type=text]{-webkit-user-select:text;user-select:text}
+  .seg,.row{display:flex;gap:8px}
+  .seg button,.btn{flex:1;padding:11px 8px;border-radius:14px;border:1.5px solid rgba(155,107,255,.55);background:#0b0826;color:var(--muted);
+    font:400 15px 'Outfit',system-ui,sans-serif;cursor:pointer;touch-action:manipulation}
+  .seg button.on,.btn.primary{color:#fff;border-color:#ff7ac8;background:linear-gradient(160deg,#3b1f6e,#1d1046);box-shadow:0 0 14px rgba(255,122,200,.3)}
+  .btn.danger{color:#ffb0bf;border-color:rgba(255,107,127,.7)}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:30px;background:transparent;touch-action:pan-x;margin:0}
+  input[type=range]::-webkit-slider-runnable-track{height:5px;border-radius:5px;background:linear-gradient(90deg,#5aa9ff,#9b6bff,#ff4fa3)}
+  input[type=range]::-moz-range-track{height:5px;border-radius:5px;background:linear-gradient(90deg,#5aa9ff,#9b6bff,#ff4fa3)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;margin-top:-8.5px;border-radius:50%;background:#07050f;border:2px solid #fff;box-shadow:0 0 12px rgba(255,79,163,.8)}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#07050f;border:2px solid #fff}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <button class="chip" id="chipStatus"><span class="dot"></span><span class="t" id="chipText">no MIDI</span></button>
+  <div class="chip" id="chipEdit"><span class="t">edit mode · tap a pad to rename</span></div>
+
+  <div class="pill">
+    <button class="rbtn" id="btnFs" aria-label="Fullscreen"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
+    <button class="rbtn" id="btnEdit" aria-label="Rename pads"><svg viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
+    <button class="rbtn" id="btnSet" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+  </div>
+
+  <div class="grid" id="grid"></div>
+</div>
+
+<!-- settings -->
+<div class="overlay" id="ovSet">
+  <div class="sheet" role="dialog" aria-label="Settings">
+    <button class="rbtn close" id="btnSetClose" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <h2>Settings</h2>
+    <div class="fields">
+      <div class="field full"><label>MIDI output</label>
+        <select id="selOut"><option value="">— none —</option></select>
+        <div class="row" style="margin-top:4px">
+          <button class="btn primary" id="btnConnect">Connect / refresh</button>
+          <button class="btn" id="btnTest">Send test note</button>
+        </div>
+        <small id="midiStat"></small>
+      </div>
+
+      <div class="field"><label>MIDI channel</label><select id="selCh"></select></div>
+      <div class="field"><label>First pad note</label><select id="selFirst"></select>
+        <small>pads go up by one semitone · C1 = 36 (Ableton naming)</small></div>
+
+      <div class="field"><label>Velocity <em id="vVel"></em></label><input type="range" id="rngVel" min="1" max="127" step="1"></div>
+      <div class="field"><label>Note mode</label>
+        <div class="seg" id="segMode"><button data-v="trigger">Trigger</button><button data-v="gate">Gate</button></div>
+        <small>trigger = short blip · gate = held while pressed</small></div>
+
+      <div class="field"><label>Haptics</label>
+        <div class="seg" id="segHap"><button data-v="1">On</button><button data-v="0">Off</button></div></div>
+      <div class="field"><label>Keep screen on</label>
+        <div class="seg" id="segWake"><button data-v="1">On</button><button data-v="0">Off</button></div></div>
+
+      <div class="field full"><label>Pad names</label>
+        <button class="btn danger" id="btnReset">Clear all names</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- rename -->
+<div class="overlay top" id="ovName">
+  <div class="sheet small" role="dialog" aria-label="Rename pad">
+    <h2 id="nameTitle">Rename pad</h2>
+    <div class="field"><input type="text" id="inpName" maxlength="40" autocomplete="off" placeholder="song name"></div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn" id="btnNameClear">Clear</button>
+      <button class="btn" id="btnNameCancel">Cancel</button>
+      <button class="btn primary" id="btnNameSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ================= state =================
+  const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const noteName = n => NOTE_NAMES[n % 12] + (Math.floor(n / 12) - 2);   // Ableton: C3 = 60, so C1 = 36
+  const COLS = ['90,169,255','73,224,200','141,255,106','255,193,90','255,107,127','176,115,255']; // per column
+  const NPADS = 12, TRIGGER_MS = 120;
+  const DEF = { names: Array(NPADS).fill(''), ch: 1, vel: 127, first: 36, mode: 'trigger', haptics: 1, wake: 1, outId: '' };
+  const KEY = 'lumatrigger.v1';
+  let S = JSON.parse(JSON.stringify(DEF));
+  try { const raw = localStorage.getItem(KEY); if (raw) Object.assign(S, JSON.parse(raw)); } catch (_) {}
+  if (!Array.isArray(S.names)) S.names = [];
+  S.names = Array.from({ length: NPADS }, (_, i) => String(S.names[i] || ''));
+  S.first = Math.min(Math.max(+S.first || 36, 0), 127 - (NPADS - 1));
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (_) {} };
+  const $ = id => document.getElementById(id);
+
+  // ================= MIDI =================
+  let access = null, out = null, midiState = 'idle', midiErr = '';
+  const chip = $('chipStatus'), chipText = $('chipText');
+
+  function setChip() {
+    const ok = !!out;
+    chip.classList.toggle('ok', ok);
+    chipText.textContent = ok ? out.name : (midiState === 'noports' ? 'no MIDI output' : midiState === 'idle' ? 'tap to connect' : 'MIDI unavailable');
+    const msg = {
+      idle: 'Not connected yet. Tap “Connect / refresh” and allow MIDI access.',
+      unsupported: 'This browser (or this preview frame) doesn’t offer Web MIDI. Use Chrome on Android, on a page opened directly over HTTPS.',
+      blocked: !window.isSecureContext
+        ? 'MIDI needs a secure page. This one was opened from a local file. Upload index.html to your HTTPS site and open it from there.'
+        : (window.top !== window.self)
+        ? 'MIDI is blocked because this page is running inside a preview frame. Upload index.html to your own HTTPS site and open it directly in Chrome.'
+        : 'MIDI access was blocked' + (midiErr ? ' (' + midiErr + ')' : '') + '. Tap the lock/tune icon next to the address bar and allow MIDI for this site.',
+      noports: 'Web MIDI works, but no output was found. Plug in the USB cable, set the phone’s USB mode to MIDI, then tap refresh.',
+      connected: 'Sending to: ' + (out ? out.name : '')
+    }[ok ? 'connected' : midiState] || '';
+    $('midiStat').textContent = msg;
+  }
+
+  async function connectMIDI() {
+    if (!navigator.requestMIDIAccess) { midiState = 'unsupported'; setChip(); return; }
+    try {
+      if (!access) { access = await navigator.requestMIDIAccess(); access.onstatechange = refreshPorts; }
+      refreshPorts();
+    } catch (e) { midiState = 'blocked'; midiErr = (e && e.name) || ''; setChip(); }
+  }
+
+  function refreshPorts() {
+    const outs = access ? [...access.outputs.values()] : [];
+    const sel = $('selOut'); sel.innerHTML = '';
+    if (!outs.length) { sel.innerHTML = '<option value="">— none —</option>'; }
+    outs.forEach(o => { const op = document.createElement('option'); op.value = o.id; op.textContent = o.name || o.id; sel.appendChild(op); });
+    let pick = outs.find(o => o.id === S.outId) || (out && outs.find(o => o.id === out.id)) || outs[0] || null;
+    out = pick;
+    if (out) { sel.value = out.id; S.outId = out.id; save(); }
+    midiState = out ? 'connected' : 'noports';
+    setChip();
+  }
+
+  function sendMsg(bytes) {
+    if (!out) { chip.classList.remove('warn'); void chip.offsetWidth; chip.classList.add('warn'); return false; }
+    try { out.send(bytes); return true; } catch (_) { return false; }
+  }
+  const chByte = () => (S.ch - 1) & 15;
+  const sounding = Array(NPADS).fill(false);
+  const noteOn = i => { sounding[i] = sendMsg([0x90 | chByte(), S.first + i, S.vel]); return sounding[i]; };
+  const noteOff = i => { if (!sounding[i]) return; sounding[i] = false; sendMsg([0x80 | chByte(), S.first + i, 0]); };
+
+  // ================= pads =================
+  const grid = $('grid'), pads = [], offTimers = [], onSince = [], holds = new Map();
+  let editing = false;
+
+  for (let i = 0; i < NPADS; i++) {
+    const el = document.createElement('div');
+    el.className = 'pad'; el.style.setProperty('--c', COLS[i % 6]); el.dataset.i = i;
+    el.innerHTML = '<div class="orb"><i></i><i></i></div><div class="name"><span></span></div><div class="note"></div>';
+    grid.appendChild(el); pads.push(el);
+  }
+
+  function fsFor(len) { return len <= 5 ? 24 : len <= 9 ? 20 : len <= 14 ? 16 : len <= 22 ? 13 : 11; }
+  function renderPads() {
+    pads.forEach((el, i) => {
+      const nm = S.names[i].trim();
+      el.classList.toggle('empty', !nm);
+      el.querySelector('.name span').textContent = nm || 'Pad ' + (i + 1);
+      el.style.setProperty('--fs', fsFor((nm || 'Pad 12').length));
+      el.querySelector('.note').textContent = noteName(S.first + i);
+    });
+  }
+
+  function ripple(el, e) {
+    const r = el.getBoundingClientRect(), s = document.createElement('span');
+    s.className = 'ripple';
+    s.style.left = (e ? e.clientX - r.left : r.width / 2) + 'px';
+    s.style.top = (e ? e.clientY - r.top : r.height / 2) + 'px';
+    el.appendChild(s); s.addEventListener('animationend', () => s.remove());
+  }
+
+  function press(i, e) {
+    const el = pads[i];
+    clearTimeout(offTimers[i]);
+    if (!access && navigator.requestMIDIAccess) connectMIDI();
+    el.classList.add('on'); onSince[i] = performance.now(); ripple(el, e);
+    if (S.haptics && navigator.vibrate) { try { navigator.vibrate(10); } catch (_) {} }
+    if (noteOn(i) && S.mode === 'trigger') offTimers[i] = setTimeout(() => noteOff(i), TRIGGER_MS);
+  }
+  function release(i) {
+    if (S.mode === 'gate') noteOff(i);
+    const wait = Math.max(0, 110 - (performance.now() - onSince[i]));
+    setTimeout(() => { if (![...holds.values()].includes(i)) pads[i].classList.remove('on'); }, wait);
+  }
+
+  let editCand = -1;
+  pads.forEach((el, i) => {
+    el.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      if (editing) { editCand = i; return; }
+      try { el.setPointerCapture(e.pointerId); } catch (_) {}
+      if ([...holds.values()].includes(i)) return;      // already down from another finger
+      holds.set(e.pointerId, i); press(i, e);
+    });
+    const up = e => {
+      if (editing) { if (e.type === 'pointerup' && editCand === i) openName(i); editCand = -1; return; }
+      if (!holds.has(e.pointerId)) return;
+      const k = holds.get(e.pointerId); holds.delete(e.pointerId); release(k);
+    };
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    el.addEventListener('lostpointercapture', up);
+    el.addEventListener('contextmenu', e => e.preventDefault());
+  });
+  document.addEventListener('gesturestart', e => e.preventDefault());
+
+  function panic() {
+    [...holds.values()].forEach(i => { if (S.mode === 'gate') noteOff(i); pads[i].classList.remove('on'); });
+    holds.clear();
+  }
+  document.addEventListener('visibilitychange', () => { if (document.hidden) panic(); else wake(); });
+
+  // ================= rename =================
+  let nameIdx = -1;
+  const ovName = $('ovName'), inp = $('inpName');
+  function openName(i) {
+    nameIdx = i; $('nameTitle').textContent = 'Pad ' + (i + 1) + ' · ' + noteName(S.first + i);
+    inp.value = S.names[i]; ovName.classList.add('open');
+    setTimeout(() => { inp.focus(); inp.select(); }, 60);
+  }
+  const closeName = () => { ovName.classList.remove('open'); inp.blur(); nameIdx = -1; };
+  function saveName(v) { if (nameIdx < 0) return; S.names[nameIdx] = v.trim().slice(0, 40); save(); renderPads(); closeName(); }
+  $('btnNameSave').addEventListener('click', () => saveName(inp.value));
+  $('btnNameClear').addEventListener('click', () => saveName(''));
+  $('btnNameCancel').addEventListener('click', closeName);
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') saveName(inp.value); if (e.key === 'Escape') closeName(); });
+  ovName.addEventListener('pointerdown', e => { if (e.target === ovName) closeName(); });
+
+  const btnEdit = $('btnEdit');
+  btnEdit.addEventListener('click', () => {
+    editing = !editing; panic();
+    $('app').classList.toggle('editing', editing); btnEdit.classList.toggle('active', editing);
+  });
+
+  // ================= settings =================
+  const ovSet = $('ovSet'), selCh = $('selCh'), selFirst = $('selFirst');
+  for (let c = 1; c <= 16; c++) { const o = document.createElement('option'); o.value = c; o.textContent = 'Channel ' + c; selCh.appendChild(o); }
+  for (let n = 0; n <= 127 - (NPADS - 1); n++) { const o = document.createElement('option'); o.value = n; o.textContent = noteName(n) + '  ·  ' + n; selFirst.appendChild(o); }
+
+  function syncUI() {
+    selCh.value = S.ch; selFirst.value = S.first;
+    $('rngVel').value = S.vel; $('vVel').textContent = S.vel;
+    document.querySelectorAll('#segMode button').forEach(b => b.classList.toggle('on', b.dataset.v === S.mode));
+    document.querySelectorAll('#segHap button').forEach(b => b.classList.toggle('on', +b.dataset.v === S.haptics));
+    document.querySelectorAll('#segWake button').forEach(b => b.classList.toggle('on', +b.dataset.v === S.wake));
+    renderPads(); setChip();
+  }
+  const set = (k, v) => { S[k] = v; save(); syncUI(); };
+
+  selCh.addEventListener('change', () => set('ch', +selCh.value));
+  selFirst.addEventListener('change', () => set('first', +selFirst.value));
+  $('rngVel').addEventListener('input', e => set('vel', +e.target.value));
+  document.querySelectorAll('#segMode button').forEach(b => b.addEventListener('click', () => set('mode', b.dataset.v)));
+  document.querySelectorAll('#segHap button').forEach(b => b.addEventListener('click', () => set('haptics', +b.dataset.v)));
+  document.querySelectorAll('#segWake button').forEach(b => b.addEventListener('click', () => { set('wake', +b.dataset.v); wake(); }));
+  $('selOut').addEventListener('change', e => {
+    out = access ? access.outputs.get(e.target.value) || null : null;
+    S.outId = out ? out.id : ''; save(); midiState = out ? 'connected' : 'noports'; setChip();
+  });
+  $('btnConnect').addEventListener('click', connectMIDI);
+  $('btnTest').addEventListener('click', () => {
+    if (!out) { sendMsg([]); return; }
+    pads[0].classList.add('on'); ripple(pads[0]); clearTimeout(offTimers[0]); noteOn(0);
+    setTimeout(() => { noteOff(0); pads[0].classList.remove('on'); }, 250);
+  });
+
+  let resetArmed = 0;
+  $('btnReset').addEventListener('click', e => {
+    if (!resetArmed) {
+      resetArmed = setTimeout(() => { resetArmed = 0; e.target.textContent = 'Clear all names'; }, 3000);
+      e.target.textContent = 'Tap again to clear all names'; return;
+    }
+    clearTimeout(resetArmed); resetArmed = 0; e.target.textContent = 'Clear all names';
+    S.names = Array(NPADS).fill(''); save(); renderPads();
+  });
+
+  const openSet = () => { panic(); ovSet.classList.add('open'); };
+  const closeSet = () => ovSet.classList.remove('open');
+  $('btnSet').addEventListener('click', openSet);
+  chip.addEventListener('click', openSet);
+  $('btnSetClose').addEventListener('click', closeSet);
+  ovSet.addEventListener('pointerdown', e => { if (e.target === ovSet) closeSet(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeSet(); closeName(); } });
+
+  // fullscreen (+ try landscape lock)
+  $('btnFs').addEventListener('click', async () => {
+    try {
+      if (document.fullscreenElement) { await document.exitFullscreen(); return; }
+      await document.documentElement.requestFullscreen();
+      try { await screen.orientation.lock('landscape'); } catch (_) {}
+    } catch (_) {}
+  });
+
+  // keep the screen awake while performing
+  let wl = null;
+  async function wake() {
+    try {
+      if (S.wake && !document.hidden && 'wakeLock' in navigator && !wl) {
+        wl = await navigator.wakeLock.request('screen'); wl.addEventListener('release', () => { wl = null; });
+      } else if (!S.wake && wl) { await wl.release(); wl = null; }
+    } catch (_) {}
+  }
+
+  // ================= boot =================
+  syncUI(); wake();
+  try {   // reconnect silently if MIDI permission was already granted
+    navigator.permissions.query({ name: 'midi' }).then(p => { if (p.state === 'granted') connectMIDI(); }).catch(() => {});
+  } catch (_) {}
+})();
+</script>
+</body>
+</html>
