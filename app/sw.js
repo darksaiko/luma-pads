@@ -1,6 +1,6 @@
 // Luma Trigger service worker — makes the app work offline.
 // Bump VERSION together with APP_VERSION in index.html on every release.
-const VERSION = 'v10';
+const VERSION = 'v11';
 const CACHE = 'luma-trigger-' + VERSION;
 const ASSETS = [
   './', 'index.html', 'manifest.json',

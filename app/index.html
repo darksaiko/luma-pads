@@ -65,6 +65,7 @@
     border:2px solid rgba(var(--c),.95);animation:rip .65s ease-out forwards}
   @keyframes rip{to{transform:scale(16);opacity:0}}
 
+  .pad .note.cust{color:#ff9fd6;text-shadow:0 0 8px rgba(255,79,163,.7)}
   .editing .pad{border-style:dashed}
   .editing .pad::before{content:"";position:absolute;right:14px;top:12px;width:9px;height:9px;border-radius:50%;
     background:var(--pink);box-shadow:0 0 10px var(--pink);z-index:3;animation:blink 1.2s ease-in-out infinite}
@@ -183,6 +184,8 @@
 
       <div class="field full"><label>Pad names</label>
         <button class="btn danger" id="btnReset">Clear all names</button></div>
+      <div class="field full"><label>Pad notes</label>
+        <button class="btn danger" id="btnResetNotes">Reset all notes to sequential</button></div>
     </div>
     <div class="foot">&copy; AlpacaSoft &amp; <a href="https://instagram.com/darksaiko" target="_blank" rel="noopener noreferrer">Saiko</a><span class="ver" id="appVer"></span></div>
   </div>
@@ -193,6 +196,8 @@
   <div class="sheet small" role="dialog" aria-label="Rename pad">
     <h2 id="nameTitle">Rename pad</h2>
     <div class="field"><input type="text" id="inpName" maxlength="40" autocomplete="off" placeholder="song name"></div>
+    <div class="field" style="margin-top:12px"><label>MIDI note</label><select id="selNote"></select>
+      <small>automatic follows the first note in Settings</small></div>
     <div class="row" style="margin-top:14px">
       <button class="btn" id="btnNameClear">Clear</button>
       <button class="btn" id="btnNameCancel">Cancel</button>
@@ -207,14 +212,16 @@
   const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
   const noteName = n => NOTE_NAMES[n % 12] + (Math.floor(n / 12) - 2);   // Ableton: C3 = 60, so C1 = 36
   const COLS = ['90,169,255','73,224,200','141,255,106','255,193,90','255,107,127','176,115,255']; // per column
-  const APP_VERSION = 'v10';   // bump on every release (and VERSION in sw.js)
+  const APP_VERSION = 'v11';   // bump on every release (and VERSION in sw.js)
   const NPADS = 15, MAXP = 3, TOTAL = NPADS * MAXP, TRIGGER_MS = 120;   // 15 pads per page (3x5 / 5x3), up to 3 pages
-  const DEF = { names: Array(TOTAL).fill(''), pages: 1, ch: 1, vel: 127, first: 36, mode: 'trigger', haptics: 1, wake: 1, outId: '' };
+  const DEF = { names: Array(TOTAL).fill(''), notes: Array(TOTAL).fill(-1), pages: 1, ch: 1, vel: 127, first: 36, mode: 'trigger', haptics: 1, wake: 1, outId: '' };
   const KEY = 'lumatrigger.v1';
   let S = JSON.parse(JSON.stringify(DEF));
   try { const raw = localStorage.getItem(KEY); if (raw) Object.assign(S, JSON.parse(raw)); } catch (_) {}
   if (!Array.isArray(S.names)) S.names = [];
   S.names = Array.from({ length: TOTAL }, (_, i) => String(S.names[i] || ''));
+  if (!Array.isArray(S.notes)) S.notes = [];
+  S.notes = Array.from({ length: TOTAL }, (_, i) => { const n = Math.round(+S.notes[i]); return S.notes[i] != null && n >= 0 && n <= 127 ? n : -1; });   // -1 = automatic (first note + position)
   S.pages = Math.min(Math.max(Math.round(+S.pages) || 1, 1), MAXP);
   const maxFirst = () => 127 - (NPADS * S.pages - 1);
   S.first = Math.min(Math.max(+S.first || 36, 0), maxFirst());
@@ -269,8 +276,10 @@
   }
   const chByte = () => (S.ch - 1) & 15;
   const sounding = Array(TOTAL).fill(false);
-  const noteOn = i => { sounding[i] = sendMsg([0x90 | chByte(), S.first + i, S.vel]); return sounding[i]; };
-  const noteOff = i => { if (!sounding[i]) return; sounding[i] = false; sendMsg([0x80 | chByte(), S.first + i, 0]); };
+  const noteFor = a => S.notes[a] >= 0 ? S.notes[a] : S.first + a;   // custom note, or sequential from the first note
+  const sentNote = Array(TOTAL).fill(0);
+  const noteOn = i => { const n = noteFor(i); sounding[i] = sendMsg([0x90 | chByte(), n, S.vel]); if (sounding[i]) sentNote[i] = n; return sounding[i]; };
+  const noteOff = i => { if (!sounding[i]) return; sounding[i] = false; sendMsg([0x80 | chByte(), sentNote[i], 0]); };   // release the note that was actually sent
 
   // ================= pads =================
   const grid = $('grid'), pads = [], offTimers = [], onSince = [], holds = new Map();
@@ -315,7 +324,7 @@
         el.style.setProperty('--fs', f.px / (Math.min(W, H) / 100));
         el.classList.toggle('brk', !f.ok);
       }
-      el.querySelector('.note').textContent = noteName(S.first + a);
+      const nt = el.querySelector('.note'); nt.textContent = noteName(noteFor(a)); nt.classList.toggle('cust', S.notes[a] >= 0);
     });
   }
   let rpQueued = false;
@@ -375,17 +384,21 @@
 
   // ================= rename =================
   let nameIdx = -1;
-  const ovName = $('ovName'), inp = $('inpName');
+  const ovName = $('ovName'), inp = $('inpName'), selNote = $('selNote');
+  { const o = document.createElement('option'); o.value = -1; selNote.appendChild(o);
+    for (let n = 0; n <= 127; n++) { const op = document.createElement('option'); op.value = n; op.textContent = noteName(n) + '  ·  ' + n; selNote.appendChild(op); } }
   function openName(i) {
     const a = page * NPADS + i;
-    nameIdx = a; $('nameTitle').textContent = 'Pad ' + (a + 1) + ' · ' + noteName(S.first + a);
+    nameIdx = a; $('nameTitle').textContent = 'Pad ' + (a + 1) + ' · ' + noteName(noteFor(a));
+    selNote.options[0].textContent = 'Automatic · ' + noteName(S.first + a) + ' (' + (S.first + a) + ')';
+    selNote.value = S.notes[a] >= 0 ? S.notes[a] : -1;
     inp.value = S.names[a]; ovName.classList.add('open');
     setTimeout(() => { inp.focus(); inp.select(); }, 60);
   }
   const closeName = () => { ovName.classList.remove('open'); inp.blur(); nameIdx = -1; };
-  function saveName(v) { if (nameIdx < 0) return; S.names[nameIdx] = v.trim().slice(0, 40); save(); renderPads(); closeName(); }
+  function saveName(v, keepNote) { if (nameIdx < 0) return; S.names[nameIdx] = v.trim().slice(0, 40); if (!keepNote) S.notes[nameIdx] = +selNote.value; save(); renderPads(); closeName(); }
   $('btnNameSave').addEventListener('click', () => saveName(inp.value));
-  $('btnNameClear').addEventListener('click', () => saveName(''));
+  $('btnNameClear').addEventListener('click', () => saveName('', true));
   $('btnNameCancel').addEventListener('click', closeName);
   inp.addEventListener('keydown', e => { if (e.key === 'Enter') saveName(inp.value); if (e.key === 'Escape') closeName(); });
   ovName.addEventListener('pointerdown', e => { if (e.target === ovName) closeName(); });
@@ -467,6 +480,16 @@
     }
     clearTimeout(resetArmed); resetArmed = 0; e.target.textContent = 'Clear all names';
     S.names = Array(TOTAL).fill(''); save(); renderPads();
+  });
+
+  let notesArmed = 0;
+  $('btnResetNotes').addEventListener('click', e => {
+    if (!notesArmed) {
+      notesArmed = setTimeout(() => { notesArmed = 0; e.target.textContent = 'Reset all notes to sequential'; }, 3000);
+      e.target.textContent = 'Tap again to reset all notes'; return;
+    }
+    clearTimeout(notesArmed); notesArmed = 0; e.target.textContent = 'Reset all notes to sequential';
+    S.notes = Array(TOTAL).fill(-1); save(); renderPads();
   });
 
   const openSet = () => { panic(); ovSet.classList.add('open'); };
