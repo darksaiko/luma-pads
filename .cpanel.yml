@@ -1,6 +1,6 @@
 ---
 deployment:
   tasks:
-    - export DEPLOYPATH=/home/alpacaqr/public_html/trigger/
+    - export DEPLOYPATH=/home/alpacaqr/public_html/pads/
     - /bin/mkdir -p $DEPLOYPATH
     - /bin/cp -Rf app/. $DEPLOYPATH

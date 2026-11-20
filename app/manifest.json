@@ -1,7 +1,7 @@
 {
-  "name": "Luma Trigger",
-  "short_name": "Trigger",
-  "description": "MIDI trigger pad for Ableton scenes",
+  "name": "Luma Pads",
+  "short_name": "Pads",
+  "description": "MIDI pads for Ableton scenes",
   "id": "./",
   "start_url": "./",
   "scope": "./",

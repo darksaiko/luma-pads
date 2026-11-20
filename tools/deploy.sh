@@ -1,14 +1,14 @@
 #!/bin/bash
-# Auto-deploy for Luma Trigger.
+# Auto-deploy for Luma Pads.
 # Run by a cPanel cron job every few minutes: checks GitHub for a new version and,
 # when there is one, copies everything in the repo's app/ folder into the live folder.
 # Paths can be overridden with environment variables (used for testing).
 
-REPO="${REPO:-/home/alpacaqr/repositories/trigger}"
-LIVE="${LIVE:-/home/alpacaqr/public_html/trigger}"
-LOG="${LOG:-/home/alpacaqr/deploy-trigger.log}"
-LOCK="${LOCK:-/home/alpacaqr/.deploy-trigger.lock}"
-STATE="${STATE:-/home/alpacaqr/.deploy-trigger.last}"
+REPO="${REPO:-/home/alpacaqr/repositories/luma-pads}"
+LIVE="${LIVE:-/home/alpacaqr/public_html/pads}"
+LOG="${LOG:-/home/alpacaqr/deploy-pads.log}"
+LOCK="${LOCK:-/home/alpacaqr/.deploy-pads.lock}"
+STATE="${STATE:-/home/alpacaqr/.deploy-pads.last}"
 
 main() {
   cd "$REPO" || exit 1
